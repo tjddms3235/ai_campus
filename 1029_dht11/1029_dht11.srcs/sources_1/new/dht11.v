@@ -33,11 +33,15 @@ module dht11_controller (
     inout         dht11_io      // single wire, for half duplexing 
 );
 
-    localparam IDLE = 0, START = 1, WAIT = 2, SYNC_L = 3, STOP = 10;
+    localparam IDLE = 0, START = 1, WAIT = 2, SYNC = 3, H_DATA_L =4, H_DATA_H=5, D_DATA_L =6, D_DATA_H=7, CHECK =8, STOP = 9;
     reg [3:0] c_state, n_state;
     reg dht11_io_control_reg, dht11_io_control_next;
     reg dht11_io_reg, dht11_io_next;
     reg [$clog2(19_000)-1:0] tick_cnt_reg, tick_cnt_next;
+    reg dht_sync, dht_prev;
+
+    //failing edge dectetive
+    wire dht_fall = !dht_sync && dht_prev;
 
     // output control by 3 state buffer 
     assign dht11_io = (dht11_io_control_reg) ? dht11_io_reg : 1'bz;
@@ -48,11 +52,15 @@ module dht11_controller (
             dht11_io_control_reg <= 1'b1;
             dht11_io_reg         <= 1'b1;
             tick_cnt_reg         <= 0;
+            dht_prev <= 1'b1; //sync 2 f/f : rst
+            dht_sync <= 1'b1; //sync 2 f/f : rst
         end else begin
             c_state              <= n_state;
             dht11_io_control_reg <= dht11_io_control_next;
             dht11_io_reg         <= dht11_io_next;
             tick_cnt_reg         <= tick_cnt_next;
+            dht_prev <= dht11_io; //sync 2 f/f : solve cdc
+            dht_sync <= dht_prev; //sync 2 f/f : solve cdc
         end
     end
 
@@ -62,6 +70,7 @@ module dht11_controller (
         dht11_io_control_next = dht11_io_control_reg;
         dht11_io_next         = dht11_io_reg;
         tick_cnt_next         = tick_cnt_reg;
+        
         case (c_state)
             IDLE: begin
                 dht11_io_next = 1'b1;
@@ -71,7 +80,7 @@ module dht11_controller (
                     n_state       = START;
                 end
             end
-            START: begin
+            START: begin //stay : low 19ms 
                 dht11_io_next = 1'b0;
                 dht11_io_control_next = 1'b1;
                 if (us_tick) begin
@@ -83,19 +92,25 @@ module dht11_controller (
                     end
                 end
             end
-            WAIT: begin
+            WAIT: begin //stay : high 30us 
                 dht11_io_next = 1'b1;
                 if (us_tick) begin
                     if (tick_cnt_reg == 30 - 1) begin
                         tick_cnt_next = 0;
                         // change output to high impedence
                         dht11_io_control_next = 1'b0;
-                        n_state = STOP;  // example
+                        n_state = SYNC;  // example
                     end else begin
                         tick_cnt_next = tick_cnt_reg + 1;
                     end
                 end
             end
+            SYNC :  begin //wait 80us low + 80us high
+                dht11_io_control_next = 1'b0;
+                if(us_tick) begin
+                end
+            end
+
             STOP: begin
                 if (us_tick) begin
                     if (tick_cnt_reg == 60 - 1) begin
