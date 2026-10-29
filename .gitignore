@@ -19,4 +19,4 @@
 !**/*.srcs/**/*.coe
 
 # 5) source 폴더는 전부 허용
-!source/**
+!src/**
