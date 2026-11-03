@@ -214,7 +214,7 @@ class generator;
     endfunction
 
     task run();
-        repeat (10) begin
+        repeat (256) begin
             tr = new; 
             //계속 tr 생성. 
             //수정 전 코드 function new 안에서 tr =new 실행 (주소 하나에 값 10번 덮어씀 //결국 마지막 값만 할당될 수 도 있음)
@@ -290,6 +290,7 @@ module tb_adder ();
     );
 
     initial begin
+        $timeformat(-9, 0, " ns", 0);
         env = new(adder_if);
         env.run();
         $finish;
