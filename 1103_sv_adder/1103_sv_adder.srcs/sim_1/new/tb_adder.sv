@@ -175,7 +175,7 @@
 //     initial begin
 //         env = new(adder_if);
 //         env.run();
-//         $finish;
+//         $finish;     
 //     end
 // endmodule
 
@@ -185,7 +185,7 @@
 interface adder_interface ();
     logic [7:0] a, b;
     logic       mode;
-    logic [7:0] s;
+    logic [8:0] s;
     logic       c;
 endinterface
 
@@ -195,7 +195,7 @@ class transaction; //변수 선언을 위한 자료형(객체)만 생성/
     rand bit       mode;
     
     // monior variable
-    logic [7:0] s;
+    logic [8:0] s;
     logic       c;   
 
     function debug_print(string name);
@@ -209,8 +209,8 @@ class generator;
 
     mailbox #(transaction) gen2drv_mbox; //put 시 데이터 전달, get 시 데이터 수신(driver에서 get)
 
-    function new(mailbox #(transaction) gen2drv_mbox_a); //transaction 형식으로 데이터 전달
-        gen2drv_mbox = gen2drv_mbox_a;
+    function new(mailbox #(transaction) gen2drv_mbox_a); //객체 생성 초기화 /transaction 형식으로 데이터 전달
+        gen2drv_mbox = gen2drv_mbox_a; //assign 처럼 연결한다는 개념으로 접근할 것
     endfunction
 
     task run();
@@ -233,7 +233,6 @@ class driver;
     
     function new(mailbox #(transaction) gen2drv_mbox_a, 
                  virtual adder_interface adder_if_v_a);
-        
         gen2drv_mbox = gen2drv_mbox_a;
         adder_if_v = adder_if_v_a;
     endfunction
@@ -252,7 +251,7 @@ class driver;
     endtask
 endclass
 
-class environment;
+class environment; //다른 객체들 연결 
     generator gen;
     driver drv;
 
@@ -290,7 +289,7 @@ module tb_adder ();
     );
 
     initial begin
-        $timeformat(-9, 0, " ns", 0);
+        $timeformat(-9, 0, " ns", 0); //-9: 나노, 0: 소수점 이하 0자리
         env = new(adder_if);
         env.run();
         $finish;
