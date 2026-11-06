@@ -17,9 +17,9 @@ class transaction;
     rand bit [7:0] d;
     logic    [7:0] q;
 
-    function debug_print(string name);
-        $display("%d : [%s] resset = %d, d=%d, q=%d",$time, name, rst, d, q);
-    endfunction
+    // function debug_print(string name);
+    //     $display("%d : [%s] resset = %d, d=%d, q=%d",$time, name, rst, d, q);
+    // endfunction
 endclass
 
 class generator;
