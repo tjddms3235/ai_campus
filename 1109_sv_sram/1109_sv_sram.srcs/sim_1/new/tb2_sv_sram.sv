@@ -151,6 +151,7 @@ class scoreboard;
 
             ->gen_next_evt;
         end
+        end
     endtask
 
     task report();
@@ -168,7 +169,7 @@ endclass
 
 class environment;
     generator   gen;
-    driver      drv;
+    driver      drv; 
     monitor     mon;
     scoreboard scb;
     
