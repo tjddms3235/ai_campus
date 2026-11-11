@@ -1,245 +1,8 @@
-// `timescale 1ns / 1ps
-// //////////////////////////////////////////////////////////////////////////////////
-// // Company: 
-// // Engineer: 
-// // 
-// // Create Date: 2026/11/10 14:33:34
-// // Design Name: 
-// // Module Name: tb_fifo
-// // Project Name: 
-// // Target Devices: 
-// // Tool Versions: 
-// // Description: 
-// // 
-// // Dependencies: 
-// // 
-// // Revision:
-// // Revision 0.01 - File Created
-// // Additional Comments:
-// // 
-// //////////////////////////////////////////////////////////////////////////////////
-
-// interface fifo_interface(input clk);
-
-//     logic       rst;
-//     logic [7:0] push_data;
-//     logic       push;
-//     logic       pop;
-//     logic [7:0] pop_data;
-//     logic       full;
-//     logic       empty;
-// endinterface
-
-// class transaction;
-//     rand bit    rst;
-//     rand bit[7:0]  push_data;
-//     rand bit    push;
-//     rand bit    pop;
-//     logic [7:0] pop_data;
-//     logic       full;
-//     logic       empty;
-
-//     function void debug_print(string name);
-//         $display("%t : [%s] rst=%d push(%d) = [%d], full(%d) / pop(%d) = [%d], empty(%d)  "
-//                 ,$time, name, rst, push, push_data, full, pop, pop_data,empty);
-//     endfunction
-
-// endclass 
-
-// class generator;
-//     transaction tr;
-//     mailbox #(transaction) gen2drv_mbox;
-//     event gen_next_evt;
-
-//     function new(mailbox #(transaction) gen2drv_mbox,
-//                 event gen_next_evt);
-//         this.gen2drv_mbox = gen2drv_mbox;
-//         this.gen_next_evt = gen_next_evt;
-//     endfunction
-
-//     task run(int run_count);
-//        repeat(run_count) begin
-//             tr = new;
-//             tr.randomize();
-//             gen2drv_mbox.put(tr);
-//             tr.rst =0;
-//             tr.debug_print("gen");
-//             @(gen_next_evt);
-//        end
-//     endtask
-// endclass
-
-// class driver;
-//     transaction tr;
-//     mailbox #(transaction) gen2drv_mbox;
-//     virtual fifo_interface fifo_vif;
-
-//     function new(mailbox #(transaction) gen2drv_mbox,
-//                 virtual fifo_interface fifo_vif);
-//         this.gen2drv_mbox = gen2drv_mbox;
-//         this.fifo_vif     = fifo_vif;
-//     endfunction
-
-//     task preset();
-//         fifo_vif.rst = 1;
-//         repeat(2) @(negedge fifo_vif.clk);
-//         fifo_vif.rst = 0;
-//     endtask
-
-//     task run();
-//         forever begin
-//             @(posedge fifo_vif.clk);
-//             gen2drv_mbox.get(tr);
-//             tr.debug_print("drv");
-//             #1;
-//             fifo_vif.rst        = tr.rst;
-//             fifo_vif.push       = tr.push;
-//             fifo_vif.push_data  = tr.push_data;
-//             fifo_vif.pop        = tr.pop;
-//         end
-//     endtask
-// endclass
-
-// class monitor;
-//     transaction tr;
-//     mailbox #(transaction) mon2scb_mbox;
-//     virtual fifo_interface fifo_vif;
-    
-//     function new(mailbox #(transaction) mon2scb_mbox,
-//                 virtual fifo_interface fifo_vif);
-//         this.mon2scb_mbox = mon2scb_mbox;
-//         this.fifo_vif     = fifo_vif;
-//     endfunction
-
-//     task run();
-//         forever begin
-//             @(negedge fifo_vif.clk);
-//             tr = new;
-//             tr.rst        = fifo_vif.rst;  
-//             tr.push_data  = fifo_vif.push_data;
-//             tr.push       = fifo_vif.push;
-//             tr.pop_data   = fifo_vif.pop_data;
-//             tr.pop        = fifo_vif.pop;
-//             tr.full        = fifo_vif.full;
-//             tr.empty        = fifo_vif.empty;
-//             mon2scb_mbox.put(tr);
-//         end
-//     endtask
-// endclass
-
-// class scoreboard;
-//     transaction tr;
-//     mailbox #(transaction) mon2scb_mbox;
-//     event gen_next_evt;
-    
-//     function new(mailbox #(transaction) mon2scb_mbox,
-//                 event gen_next_evt);
-//         this.mon2scb_mbox = mon2scb_mbox;
-//         this.gen_next_evt =  gen_next_evt;
-//     endfunction
-
-//     logic [7:0] expected_fifo[$:3];
-//     int total_cnt = 0, pass_cnt =0, fail_cnt = 0;
-//     task run();
-//         forever begin
-//             mon2scb_mbox.get(tr);
-//             tr.debug_print("scb");
-//             total_cnt++;
-//             if(!tr.rst) begin
-//                 if(!tr.full & tr.push) begin
-//                     expected_fifo.push_back(tr.push_data);
-//                 end
-                
-//                 if(!tr.empty & tr.pop)begin
-//                     if(expected_fifo.pop_front()===tr.pop_data) begin
-//                         $display("pass");
-//                         pass_cnt++;
-//                     end
-//                     else begin
-//                         $display("fail");
-//                         fail_cnt++;
-//                     end
-//                 end
-//             end
-//             ->gen_next_evt;
-//         end
-//     endtask
-// endclass
-
-// class environment;
-//     generator   gen;
-//     driver      drv; 
-//     monitor     mon;
-//     scoreboard scb;
-
-//     mailbox #(transaction) gen2drv_mbox;
-//     mailbox #(transaction) mon2scb_mbox;
-
-//     event gen_next_evt;
-
-    
-    
-//     function new(virtual fifo_interface fifo_vif);
-//         gen2drv_mbox = new;
-//         mon2scb_mbox = new;
-
-//         gen = new(gen2drv_mbox,  gen_next_evt);
-//         drv = new(gen2drv_mbox, fifo_vif);
-//         mon = new(mon2scb_mbox, fifo_vif);
-//         scb = new(mon2scb_mbox, gen_next_evt); 
-//     endfunction
-
-//     task run(int run_count);
-//         drv.preset;
-//         fork 
-//             gen.run(run_count);
-//             drv.run();
-//             mon.run();
-//             scb.run();
-//         join_any
-//         #10;
-//         $display("end fifo test");
-
-//     endtask
-// endclass
-
-// module tb_fifo();
-   
-//     logic clk = 0;
-//     fifo_interface fifo_if(clk); 
-//     environment env;
-
-
-//     sv_fifo dut_fifo(
-//         .clk        (clk),
-//         .rst        (fifo_if.rst),
-//         .push_data  (fifo_if.push_data),
-//         .push       (fifo_if.push),
-//         .pop         (fifo_if.pop),
-//         .pop_data   (fifo_if.pop_data),
-//         .full       (fifo_if.full),
-//         .empty      (fifo_if.empty)
-//     );
-
-//     always #5 clk = ~clk;
-//     initial begin
-//         env =new(fifo_if);
-//         env.run(10);
-//         $finish;
-//     end
-// endmodule
-
-
-
-//---------------------------------------
 `timescale 1ns / 1ps
 
-//=========================================================
-// 1. Interface
-//=========================================================
-interface fifo_interface (
-    input logic clk
-);
+
+interface fifo_interface(input clk);
+
     logic       rst;
     logic [7:0] push_data;
     logic       push;
@@ -249,246 +12,146 @@ interface fifo_interface (
     logic       empty;
 endinterface
 
-
-//=========================================================
-// 2. Transaction
-//=========================================================
 class transaction;
-
-    bit         rst;
-    rand bit [7:0] push_data;
+    rand bit    rst;
+    rand bit[7:0]  push_data;
     rand bit    push;
     rand bit    pop;
-
     logic [7:0] pop_data;
     logic       full;
     logic       empty;
 
     function void debug_print(string name);
-        $display(
-            "%t : [%s] rst = %d, push_data = %d, push = %d, pop = %d, pop_data = %d, full = %d, empty = %d",
-            $time, name, rst, push_data, push, pop,
-            pop_data, full, empty
-        );
+        $display("%t : [%s] rst=%d push(%d) = [%d], full(%d) / pop(%d) = [%d], empty(%d)  "
+                ,$time, name, rst, push, push_data, full, pop, pop_data,empty);
     endfunction
 
-endclass
+endclass 
 
-
-//=========================================================
-// 3. Generator
-//=========================================================
 class generator;
-
     transaction tr;
-
     mailbox #(transaction) gen2drv_mbox;
     event gen_next_evt;
 
-    function new(
-        mailbox #(transaction) gen2drv_mbox,
-        event gen_next_evt
-    );
+    function new(mailbox #(transaction) gen2drv_mbox,
+                event gen_next_evt);
         this.gen2drv_mbox = gen2drv_mbox;
         this.gen_next_evt = gen_next_evt;
     endfunction
 
     task run(int run_count);
-
-        repeat (run_count) begin
-
-            tr = new();
-
-            if (!tr.randomize()) begin
-                $fatal(1, "Generator randomize failed");
-            end
-
-            tr.debug_print("GEN");
-
+       repeat(run_count) begin
+            tr = new;
+            tr.randomize();
             gen2drv_mbox.put(tr);
-
+            tr.rst =0;
+            tr.debug_print("gen");
             @(gen_next_evt);
-
-        end
-
+       end
     endtask
-
 endclass
 
-
-//=========================================================
-// 4. Driver
-//=========================================================
 class driver;
-
     transaction tr;
-
     mailbox #(transaction) gen2drv_mbox;
     virtual fifo_interface fifo_vif;
 
-    function new(
-        mailbox #(transaction) gen2drv_mbox,
-        virtual fifo_interface fifo_vif
-    );
+    function new(mailbox #(transaction) gen2drv_mbox,
+                virtual fifo_interface fifo_vif);
         this.gen2drv_mbox = gen2drv_mbox;
-        this.fifo_vif = fifo_vif;
+        this.fifo_vif     = fifo_vif;
     endfunction
 
     task preset();
-
         fifo_vif.rst = 1;
-
-        repeat (2) @(negedge fifo_vif.clk);
-
+        repeat(2) @(negedge fifo_vif.clk);
         fifo_vif.rst = 0;
-
     endtask
 
     task run();
-
         forever begin
-
             @(posedge fifo_vif.clk);
-
             gen2drv_mbox.get(tr);
-
-            tr.debug_print("DRV");
-
+            tr.debug_print("drv");
             #1;
-
-            fifo_vif.rst       = tr.rst;
-            fifo_vif.push_data = tr.push_data;
-            fifo_vif.push      = tr.push;
-            fifo_vif.pop       = tr.pop;
-
+            fifo_vif.rst        = tr.rst;
+            fifo_vif.push       = tr.push;
+            fifo_vif.push_data  = tr.push_data;
+            fifo_vif.pop        = tr.pop;
         end
-
     endtask
-
 endclass
 
-
-//=========================================================
-// 5. Monitor
-//=========================================================
 class monitor;
-
     transaction tr;
-
     mailbox #(transaction) mon2scb_mbox;
     virtual fifo_interface fifo_vif;
-
-    function new(
-        mailbox #(transaction) mon2scb_mbox,
-        virtual fifo_interface fifo_vif
-    );
+    
+    function new(mailbox #(transaction) mon2scb_mbox,
+                virtual fifo_interface fifo_vif);
         this.mon2scb_mbox = mon2scb_mbox;
-        this.fifo_vif = fifo_vif;
+        this.fifo_vif     = fifo_vif;
     endfunction
 
     task run();
-
         forever begin
-
             @(negedge fifo_vif.clk);
-
-            tr = new();
-
-            tr.rst       = fifo_vif.rst;
-            tr.push_data = fifo_vif.push_data;
-            tr.push      = fifo_vif.push;
-            tr.pop       = fifo_vif.pop;
-            tr.pop_data  = fifo_vif.pop_data;
-            tr.full      = fifo_vif.full;
-            tr.empty     = fifo_vif.empty;
-
+            tr = new;
+            tr.rst        = fifo_vif.rst;  
+            tr.push_data  = fifo_vif.push_data;
+            tr.push       = fifo_vif.push;
+            tr.pop_data   = fifo_vif.pop_data;
+            tr.pop        = fifo_vif.pop;
+            tr.full        = fifo_vif.full;
+            tr.empty        = fifo_vif.empty;
             mon2scb_mbox.put(tr);
-
         end
-
     endtask
-
 endclass
 
-
-//=========================================================
-// 6. Scoreboard
-//=========================================================
 class scoreboard;
-
     transaction tr;
-
     mailbox #(transaction) mon2scb_mbox;
     event gen_next_evt;
-
-    function new(
-        mailbox #(transaction) mon2scb_mbox,
-        event gen_next_evt
-    );
+    
+    function new(mailbox #(transaction) mon2scb_mbox,
+                event gen_next_evt);
         this.mon2scb_mbox = mon2scb_mbox;
-        this.gen_next_evt = gen_next_evt;
+        this.gen_next_evt =  gen_next_evt;
     endfunction
 
-    logic [7:0] expect_fifo[$:3];
-
-    int total_count = 0;
-    int pass_count  = 0;
-    int fail_count  = 0;
-
+    logic [7:0] expected_fifo[$:3];
+    int total_cnt = 0, pass_cnt =0, fail_cnt = 0;
     task run();
-
         forever begin
-
             mon2scb_mbox.get(tr);
-
-            tr.debug_print("SCB");
-
-            total_count++;
-
-            if (!tr.rst) begin
-
-                // PUSH
-                if (!tr.full && tr.push) begin
-                    expect_fifo.push_back(tr.push_data);
+            tr.debug_print("scb");
+            total_cnt++;
+            if(!tr.rst) begin
+                if(!tr.full & tr.push) begin
+                    expected_fifo.push_back(tr.push_data);
                 end
-
-                // POP
-                if (!tr.empty && tr.pop) begin
-
-                    if (expect_fifo.pop_front() === tr.pop_data) begin
-
-                        pass_count++;
+                
+                if(!tr.empty & tr.pop)begin
+                    if(expected_fifo.pop_front()===tr.pop_data) begin
                         $display("pass");
-
+                        pass_cnt++;
                     end
                     else begin
-
-                        fail_count++;
                         $display("fail");
-
+                        fail_cnt++;
                     end
-
                 end
-
             end
-
-            -> gen_next_evt;
-
+            ->gen_next_evt;
         end
-
     endtask
-
 endclass
 
-
-//=========================================================
-// 7. Environment
-//=========================================================
 class environment;
-
-    generator  gen;
-    driver     drv;
-    monitor    mon;
+    generator   gen;
+    driver      drv; 
+    monitor     mon;
     scoreboard scb;
 
     mailbox #(transaction) gen2drv_mbox;
@@ -496,74 +159,55 @@ class environment;
 
     event gen_next_evt;
 
+    
+    
     function new(virtual fifo_interface fifo_vif);
+        gen2drv_mbox = new;
+        mon2scb_mbox = new;
 
-        this.gen2drv_mbox = new;
-        this.mon2scb_mbox = new;
-
-        gen = new(gen2drv_mbox, gen_next_evt);
+        gen = new(gen2drv_mbox,  gen_next_evt);
         drv = new(gen2drv_mbox, fifo_vif);
         mon = new(mon2scb_mbox, fifo_vif);
-        scb = new(mon2scb_mbox, gen_next_evt);
-
+        scb = new(mon2scb_mbox, gen_next_evt); 
     endfunction
 
     task run(int run_count);
-
-        drv.preset();
-
-        fork
-
+        drv.preset;
+        fork 
             gen.run(run_count);
             drv.run();
             mon.run();
             scb.run();
-
         join_any
-
         #10;
-
-        $display("end fifo test !!");
+        $display("end fifo test");
 
     endtask
-
 endclass
 
-
-//=========================================================
-// 8. Testbench Top
-//=========================================================
-module tb_fifo_sv ();
-
+module tb_fifo();
+   
     logic clk = 0;
-
-    fifo_interface fifo_if(clk);
-
+    fifo_interface fifo_if(clk); 
     environment env;
 
-    // DUT
-    fifo_sv dut (
-        .clk       (clk),
-        .rst       (fifo_if.rst),
-        .push_data (fifo_if.push_data),
-        .push      (fifo_if.push),
-        .pop       (fifo_if.pop),
-        .pop_data  (fifo_if.pop_data),
-        .full      (fifo_if.full),
-        .empty     (fifo_if.empty)
+
+    sv_fifo dut_fifo(
+        .clk        (clk),
+        .rst        (fifo_if.rst),
+        .push_data  (fifo_if.push_data),
+        .push       (fifo_if.push),
+        .pop         (fifo_if.pop),
+        .pop_data   (fifo_if.pop_data),
+        .full       (fifo_if.full),
+        .empty      (fifo_if.empty)
     );
 
-    // Clock : 100MHz
     always #5 clk = ~clk;
-
     initial begin
-
-        env = new(fifo_if);
-
+        env =new(fifo_if);
         env.run(10);
-
         $finish;
-
     end
-
 endmodule
+
