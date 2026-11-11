@@ -102,9 +102,10 @@ class generator;
     endfunction
 
     task run(int run_count);
+        int push_only_count = 10, pop_only_count =10;
        //push test
-       $display("push only =%d",run_count);
-       repeat(run_count) begin
+       $display("push only =%d",push_only_count);
+       repeat(push_only_count) begin
             tr = new;
             tr.scenario = 1;
             tr.randomize();
@@ -115,8 +116,8 @@ class generator;
             @(gen_next_evt);
        end
        //pop test
-       $display("pop only =%d",run_count);
-        repeat(run_count) begin
+       $display("pop only =%d",pop_only_count);
+        repeat(pop_only_count) begin
             tr = new;
             tr.scenario = 2;
             tr.randomize();
@@ -207,13 +208,54 @@ class scoreboard;
     transaction tr;
     mailbox #(transaction) mon2scb_mbox;
     event gen_next_evt;
-    
+    int fifo_size = 0;
+
+    logic [7:0] expected_fifo[$:3];
+    int total_cnt = 0, pass_cnt =0, fail_cnt = 0;
+    int empty_pass_cnt=0, empty_fail_cnt;
+    int full_pass_cnt =0, full_fail_cnt;
+    bit expect_full = 0, expect_empty = 1;
+
     covergroup cg_fifo;
         option.per_instance = 1;
-        //fifo push data
-        cp_push_data : coverpoint tr.push_data{
+        //fifo push data 
+        //iff(tr.push) : push 1 인 경우에만 판단 
+        cp_push_data : coverpoint tr.push_data iff(tr.push){
             bins full[] = {[0:255]};  //범위지정. 이 범위 중 출력된 값이 %로 나타남. 256개 중 몇개 -> x%
         }
+
+        //각각의 경우가 발생하는지 확인. 1번씩만
+        //fifo  push_pop : op
+        cp_push_pop : coverpoint{tr.push, tr.pop} {
+            bins idle      = {2'b00};
+            bins push_only = {2'b10};
+            bins pop_only  = {2'b01};
+            bins push_pop  = {2'b11};
+        }
+
+        //full_empty :state
+        cp_full_empty : coverpoint{tr.full, tr.empty} {
+            bins nomal      = {2'b00};
+            bins full       = {2'b10};
+            bins empty      = {2'b01};
+           // bins full_empty  = {2'b11}; //나올 수 없는 경우, 100%으로 나오면 에러 :복잡하니 일단 주석처리함
+        }
+
+
+        //check in fifo depth
+        
+        cp_fifo_size : coverpoint fifo_size {
+//            bins size_0 = {0};
+//            bins size_1 = {1};
+//            bins size_1 = {2};
+//            bins size_1 = {3};
+//            bins size_1 = {4};
+
+            bins size[] = {[0:4]};
+        }
+        cx_op_st : cross cp_push_pop,cp_full_empty;
+        //수정) full일때 4만 나옴  0,1,2,3 빠짐 -> full, empty 제거
+        cx_op_fifo_depth : cross cp_push_pop,cp_fifo_size;
     endgroup
 
     function new(mailbox #(transaction) mon2scb_mbox,
@@ -224,21 +266,17 @@ class scoreboard;
     endfunction
 
 
-    logic [7:0] expected_fifo[$:3];
-    int total_cnt = 0, pass_cnt =0, fail_cnt = 0;
-    int empty_pass_cnt=0, empty_fail_cnt;
-    int full_pass_cnt =0, full_fail_cnt;
-    bit expect_full = 0, expect_empty = 1;
     task run();
         forever begin
             mon2scb_mbox.get(tr);
             tr.debug_print("scb");
             total_cnt++;
             if(!tr.rst) begin
-                if(expected_fifo.size()==4) begin
+                fifo_size = expected_fifo.size();
+                if(fifo_size==4) begin
                     expect_full = 1;
                 end else expect_full = 0;
-                if(expected_fifo.size()==0) begin
+                if(fifo_size==0) begin
                     expect_empty = 1;
                 end else expect_empty = 0;
 
@@ -293,7 +331,15 @@ class scoreboard;
         $display("******empty pass test  = %4d*******", empty_pass_cnt);
         $display("******empty fail test  = %4d*******", empty_fail_cnt);
         $display("***********************************");
-        $display(" *fifo coverag push data = %4.2f%%*", cg_fifo.cp_push_data.get_coverage());
+        $display("  fifo coverag push data = %4.2f %% ", cg_fifo.cp_push_data.get_coverage());
+        $display("  coverag push,pop op = %4.2f %%    ", cg_fifo.cp_push_pop.get_coverage());
+        $display("  coverag full empty  = %4.2f %%    ", cg_fifo.cp_full_empty.get_coverage());
+        $display("***********************************");
+        $display("  fifo size coverag  = %4.2f %%     ", cg_fifo.cp_fifo_size.get_coverage());
+        $display("***********************************");
+        $display("  coverag cross op_st = %4.2f %%    ", cg_fifo.cx_op_st.get_coverage());
+        $display("  coverag depth op_st = %4.2f %%    ", cg_fifo.cx_op_fifo_depth.get_coverage());
+        
     endtask
 endclass
 
@@ -356,7 +402,7 @@ module tb_fifo();
     always #5 clk = ~clk;
     initial begin
         env =new(fifo_if);
-        env.run(10);
+        env.run(256);
         $finish;
     end
 endmodule
