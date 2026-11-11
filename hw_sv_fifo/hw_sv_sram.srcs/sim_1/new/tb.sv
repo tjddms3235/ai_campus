@@ -31,6 +31,20 @@ interface fifo_interface(input clk);
     logic [7:0] pop_data;
     logic       full;
     logic       empty;
+
+  
+    property rst_full;
+        @(posedge clk) rst |-> (full === 1'b0); //x,z 포함해서 비교
+    endproperty
+    property rst_empty;
+        @(posedge clk) rst |-> (empty === 1'b1); //x,z 포함해서 비교
+    endproperty
+
+    a_rst_full :  assert property(rst_full)
+     else $display("%t assert error full %d", $time,full);
+    a_rst_empty :  assert property(rst_empty)
+    else $display("%t assert error full %d", $time,empty);
+
 endinterface
 
 class transaction;
@@ -41,6 +55,33 @@ class transaction;
     logic [7:0] pop_data;
     logic       full;
     logic       empty;
+
+    int         scenario;
+    constraint test_1{
+        if(scenario == 1) { 
+        push dist{
+            0:/0,
+            1:/10
+        };
+        pop dist{
+            0:/10,
+            1:/0
+        };
+        
+        }  
+        if(scenario == 2) { 
+        push dist{
+            0:/10,
+            1:/0
+        };
+        pop dist{
+            0:/0,
+            1:/10
+        };
+        } 
+
+    }
+
 
     function void debug_print(string name);
         $display("%t : [%s] rst=%d push(%d) = [%d], full(%d) / pop(%d) = [%d], empty(%d)  "
@@ -61,9 +102,37 @@ class generator;
     endfunction
 
     task run(int run_count);
+       //push test
+       $display("push only =%d",run_count);
        repeat(run_count) begin
             tr = new;
+            tr.scenario = 1;
             tr.randomize();
+
+            gen2drv_mbox.put(tr);
+            tr.rst =0;
+            tr.debug_print("gen");
+            @(gen_next_evt);
+       end
+       //pop test
+       $display("pop only =%d",run_count);
+        repeat(run_count) begin
+            tr = new;
+            tr.scenario = 2;
+            tr.randomize();
+
+            gen2drv_mbox.put(tr);
+            tr.rst =0;
+            tr.debug_print("gen");
+            @(gen_next_evt);
+       end
+       //ramdom
+       $display("pop only =%d",run_count);
+        repeat(run_count) begin
+            tr = new;
+            tr.scenario = 3;
+            tr.randomize();
+
             gen2drv_mbox.put(tr);
             tr.rst =0;
             tr.debug_print("gen");
@@ -85,6 +154,9 @@ class driver;
 
     task preset();
         fifo_vif.rst = 1;
+        fifo_vif.push =0;
+        fifo_vif.push_data = 0;
+        fifo_vif.pop = 0;
         repeat(2) @(negedge fifo_vif.clk);
         fifo_vif.rst = 0;
     endtask
@@ -126,6 +198,7 @@ class monitor;
             tr.full        = fifo_vif.full;
             tr.empty        = fifo_vif.empty;
             mon2scb_mbox.put(tr);
+            tr.debug_print("mon");
         end
     endtask
 endclass
@@ -143,17 +216,45 @@ class scoreboard;
 
     logic [7:0] expected_fifo[$:3];
     int total_cnt = 0, pass_cnt =0, fail_cnt = 0;
+    int empty_pass_cnt=0, empty_fail_cnt;
+    int full_pass_cnt =0, full_fail_cnt;
+    bit expect_full = 0, expect_empty = 1;
     task run();
         forever begin
             mon2scb_mbox.get(tr);
             tr.debug_print("scb");
             total_cnt++;
             if(!tr.rst) begin
-                if(!tr.full & tr.push) begin
+                if(expected_fifo.size()==4) begin
+                    expect_full = 1;
+                end else expect_full = 0;
+                if(expected_fifo.size()==0) begin
+                    expect_empty = 1;
+                end else expect_empty = 0;
+
+                //full  pass/fail
+                if(expect_full == tr.full) begin
+                    $display("pass : fifo full siganl");
+                    full_pass_cnt++;
+                end else begin
+                     $display("pass : fifo full siganl");
+                    full_fail_cnt++;
+                end
+
+                //empty pass/fail
+                if(expect_empty == tr.empty) begin
+                    $display("pass : fifo empty siganl");
+                    empty_pass_cnt++;
+                end else begin
+                     $display("pass : fifo empty siganl");
+                    empty_fail_cnt++;
+                end
+
+
+                if(!expect_full & tr.push) begin
                     expected_fifo.push_back(tr.push_data);
                 end
-                
-                if(!tr.empty & tr.pop)begin
+                if(!expect_empty & tr.pop)begin
                     if(expected_fifo.pop_front()===tr.pop_data) begin
                         $display("pass");
                         pass_cnt++;
@@ -163,9 +264,38 @@ class scoreboard;
                         fail_cnt++;
                     end
                 end
+
+                // if(!tr.full & tr.push) begin
+                //     expected_fifo.push_back(tr.push_data);
+                // end
+                
+                // if(!tr.empty & tr.pop)begin
+                //     if(expected_fifo.pop_front()===tr.pop_data) begin
+                //         $display("pass");
+                //         pass_cnt++;
+                //     end
+                //     else begin
+                //         $display("fail");
+                //         fail_cnt++;
+                //     end
+                // end
             end
             ->gen_next_evt;
         end
+    endtask
+
+    task report();
+        $display("***********************************");
+        $display("******fifo verification test*******");    
+        $display("******total test num  =  %d*******", total_cnt);
+        $display("****** pass test num  =  %d*******", pass_cnt);
+        $display("****** fail test num  =  %d*******", fail_cnt);
+        $display("***********************************");
+        $display("****** full pass test  = %d*******", full_pass_cnt);
+        $display("****** full fail test  = %d*******", full_fail_cnt);
+        $display("******empty pass test  = %d*******", empty_pass_cnt);
+        $display("******empty fail test  = %d*******", empty_fail_cnt);
+        $display("***********************************");
     endtask
 endclass
 
@@ -202,6 +332,7 @@ class environment;
         join_any
         #10;
         $display("end fifo test");
+        scb.report();
 
     endtask
 endclass
