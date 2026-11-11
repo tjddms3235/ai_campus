@@ -43,7 +43,7 @@ interface fifo_interface(input clk);
     a_rst_full :  assert property(rst_full)
      else $display("%t assert error full %d", $time,full);
     a_rst_empty :  assert property(rst_empty)
-    else $display("%t assert error full %d", $time,empty);
+    else $display("%t assert error empty %d", $time,empty);
 
 endinterface
 
@@ -208,11 +208,21 @@ class scoreboard;
     mailbox #(transaction) mon2scb_mbox;
     event gen_next_evt;
     
+    covergroup cg_fifo;
+        option.per_instance = 1;
+        //fifo push data
+        cp_push_data : coverpoint tr.push_data{
+            bins full[] = {[0:255]};  //범위지정. 이 범위 중 출력된 값이 %로 나타남. 256개 중 몇개 -> x%
+        }
+    endgroup
+
     function new(mailbox #(transaction) mon2scb_mbox,
                 event gen_next_evt);
         this.mon2scb_mbox = mon2scb_mbox;
         this.gen_next_evt =  gen_next_evt;
+        this.cg_fifo = new;
     endfunction
+
 
     logic [7:0] expected_fifo[$:3];
     int total_cnt = 0, pass_cnt =0, fail_cnt = 0;
@@ -237,7 +247,7 @@ class scoreboard;
                     $display("pass : fifo full siganl");
                     full_pass_cnt++;
                 end else begin
-                     $display("pass : fifo full siganl");
+                     $display("fail : fifo full siganl");
                     full_fail_cnt++;
                 end
 
@@ -246,7 +256,7 @@ class scoreboard;
                     $display("pass : fifo empty siganl");
                     empty_pass_cnt++;
                 end else begin
-                     $display("pass : fifo empty siganl");
+                     $display("fail : fifo empty siganl");
                     empty_fail_cnt++;
                 end
 
@@ -264,21 +274,8 @@ class scoreboard;
                         fail_cnt++;
                     end
                 end
-
-                // if(!tr.full & tr.push) begin
-                //     expected_fifo.push_back(tr.push_data);
-                // end
-                
-                // if(!tr.empty & tr.pop)begin
-                //     if(expected_fifo.pop_front()===tr.pop_data) begin
-                //         $display("pass");
-                //         pass_cnt++;
-                //     end
-                //     else begin
-                //         $display("fail");
-                //         fail_cnt++;
-                //     end
-                // end
+                //coverage update
+               cg_fifo.sample();
             end
             ->gen_next_evt;
         end
@@ -287,15 +284,16 @@ class scoreboard;
     task report();
         $display("***********************************");
         $display("******fifo verification test*******");    
-        $display("******total test num  =  %d*******", total_cnt);
-        $display("****** pass test num  =  %d*******", pass_cnt);
-        $display("****** fail test num  =  %d*******", fail_cnt);
+        $display("******total test num  =  %4d*******", total_cnt);
+        $display("****** pass test num  =  %4d*******", pass_cnt);
+        $display("****** fail test num  =  %4d*******", fail_cnt);
         $display("***********************************");
-        $display("****** full pass test  = %d*******", full_pass_cnt);
-        $display("****** full fail test  = %d*******", full_fail_cnt);
-        $display("******empty pass test  = %d*******", empty_pass_cnt);
-        $display("******empty fail test  = %d*******", empty_fail_cnt);
+        $display("****** full pass test  = %4d*******", full_pass_cnt);
+        $display("****** full fail test  = %4d*******", full_fail_cnt);
+        $display("******empty pass test  = %4d*******", empty_pass_cnt);
+        $display("******empty fail test  = %4d*******", empty_fail_cnt);
         $display("***********************************");
+        $display(" *fifo coverag push data = %4.2f%%*", cg_fifo.cp_push_data.get_coverage());
     endtask
 endclass
 
