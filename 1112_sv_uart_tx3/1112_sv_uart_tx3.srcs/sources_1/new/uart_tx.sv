@@ -66,7 +66,7 @@ module sv_uart_tx(
                         n_state         = START; 
                         data_next       = tx_data;
                         b_tick_cnt_next = 0;
-                        b_tick_cnt_next = 0;
+                        bit_cnt_next = 0;
                         tx_busy_next    = 1'b1;
                     end
             end

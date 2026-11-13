@@ -11,18 +11,18 @@ interface uart_interface (
 endinterface
 
 class transaction;
-    bit            rst;
-    bit            start;
-    rand bit [7:0] tx_data;
-    rand int       interval;  // tx start interval
-    logic          tx;
-    logic          tx_busy;
+    bit                     rst;
+    bit                     start;
+    rand logic [7:0]          tx_data;
+    rand int unsigned       interval;  // tx start interval
+    logic                   tx;
+    logic                   tx_busy;
 
     constraint interval_range {interval < 10416;}
 
     function void debug_print(string name);
         $display(
-            "%t : [%s] rst = %d, start = %d, tx_data = %d, interval = %d, tx = %d",
+            "%t : [%s] rst = %d, start = %d, tx_data = %d, interval = %d, tx = %d, tx_busy=%d", 
             $time, name, rst, start, tx_data, interval, tx, tx_busy);
     endfunction
 endclass
@@ -44,6 +44,7 @@ class generator;
             tr.rst   = 0;
             tr.start = 0;
             gen2drv_mbox.put(tr);
+            tr.debug_print("gen");
             @(gen_next_evt);
         end
     endtask
@@ -62,11 +63,22 @@ class driver;
 
     int busy_check_count = 0;
 
+    task prest();
+        uart_vif.rst =1;
+        uart_vif.tx_data = 0;
+        uart_vif.start = 0;
+        @(negedge uart_vif.clk);
+        @(negedge uart_vif.clk);
+        //repeat (2) @(negedge uart_vif.clk);
+        uart_vif.rst = 0;
+    endtask 
+
     task run();
         forever begin
             @(negedge uart_vif.clk);
             busy_check_count = 0;
             gen2drv_mbox.get(tr);
+            tr.debug_print("drv");
             // check tx_busy 
             while (uart_vif.tx_busy) begin
                 @(negedge uart_vif.clk);
@@ -98,6 +110,8 @@ class monitor;
     mailbox #(transaction) mon2scb_out_mbox;
     virtual uart_interface uart_vif;
 
+    parameter BAUD_TIME =10416*10; //10416 clock *10nsec  = 104us
+
     function new(mailbox#(transaction) mon2scb_in_mbox,
                  mailbox#(transaction) mon2scb_out_mbox,
                  virtual uart_interface uart_vif);
@@ -108,15 +122,15 @@ class monitor;
 
     task uart_receive(output logic [7:0] receive_data);
         @(posedge uart_vif.clk);
-        #(10416 / 2);
+        #(BAUD_TIME / 2);
         // check start bit
         for (int i = 0; i < 8; i++) begin
+            #(BAUD_TIME);
             receive_data[i] = uart_vif.tx;
-            #(10416);
         end
-        #(10416);
+        #(BAUD_TIME);
         // stop bit check
-        #(10416 / 2);
+        #(BAUD_TIME / 2);
     endtask
 
     task run();
@@ -130,6 +144,7 @@ class monitor;
             tr_in = new;
             tr_in.tx_data = uart_vif.tx_data;
             mon2scb_in_mbox.put(tr_in);
+            tr_in.debug_print("mon_in");
 
             // 3. baud_time * 10, mon2scb_out_mbox put
             // receive task
@@ -139,6 +154,7 @@ class monitor;
             tr_out.tx_busy = uart_vif.tx_busy;
             tr_out.tx      = uart_vif.tx;
             mon2scb_out_mbox.put(tr_out);
+            tr_out.debug_print("mon_out");
         end
     endtask
 endclass
@@ -155,6 +171,36 @@ class scoreboard;
         this.mon2scb_out_mbox = mon2scb_out_mbox;
         this.gen_next_evt     = gen_next_evt;
     endfunction
+
+    int total_cnt = 0;
+    int tx_data_pass_cnt =0, tx_data_fail_cnt =0;  
+
+    task run();
+        forever begin
+            mon2scb_in_mbox.get(tr_in);
+            tr_in.debug_print("scb_in");
+            mon2scb_out_mbox.get(tr_out);
+            tr_out.debug_print("scb_in");
+            
+            total_cnt++;
+            if(tr_in.tx_data===tr_out.tx_data)begin
+                tx_data_pass_cnt++;
+                $display("tx_data pass !!");
+            end else begin 
+                tx_data_fail_cnt++;
+                $display("tx_data fail !!");
+            end
+            ->gen_next_evt;
+        end
+    endtask
+
+    task report();
+        $display ("*************************");
+        $display ("uart tx verification test");
+        $display ("   tx_total_pass = %4d    ",total_cnt);
+        $display ("    tx_data_pass = %4d    ",tx_data_pass_cnt);
+        $display ("    tx_data_fail = %4d    ",tx_data_fail_cnt);
+    endtask
 endclass
 
 class environment;
@@ -179,6 +225,16 @@ class environment;
         scb              = new(mon2scb_in_mbox, mon2scb_out_mbox, gen_next_evt);
     endfunction
 
+    task run(int run_count);
+        drv.prest();
+        fork
+            gen.run(run_count);
+            drv.run();
+            mon.run();
+            scb.run();
+        join_any
+        scb.report();
+    endtask
 endclass
 
 
@@ -201,7 +257,7 @@ module tb_uart ();
 
     initial begin
         env = new(uart_if);
-        env.run(10);
+        env.run(2);
         $finish;
     end
 endmodule

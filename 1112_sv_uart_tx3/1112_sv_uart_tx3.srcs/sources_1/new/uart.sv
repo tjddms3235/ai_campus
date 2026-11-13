@@ -22,7 +22,7 @@ module baud_tick_gen(
     input  logic rst,
     output logic b_tick
 );
-    parameter DIV_COUNT= 100_000_000/9600*16;
+    parameter DIV_COUNT= 100_000_000/(9600*16);
     logic [$clog2(DIV_COUNT)-1 :0] counter;
 
     
