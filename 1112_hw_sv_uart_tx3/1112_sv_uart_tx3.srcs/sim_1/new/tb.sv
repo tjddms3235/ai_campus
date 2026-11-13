@@ -12,13 +12,16 @@ endinterface
 
 class transaction;
     bit                     rst;
-    bit                     start;
-    rand logic [7:0]          tx_data;
+    bit                     start; //tx start
+    rand logic [7:0]          tx_data; 
     rand int unsigned       interval;  // tx start interval
     logic                   tx;
     logic                   tx_busy;
+    bit                     start_bit_error;
+    bit                     stop_bit_error;
+    bit                     frame_time_error;
 
-    constraint interval_range {interval < 10416;}
+    constraint interval_range {interval < 1042;}
 
     function void debug_print(string name);
         $display(
@@ -98,20 +101,19 @@ class driver;
                 @(negedge uart_vif.clk);
                 uart_vif.start   = 0;
                 uart_vif.tx_data = 8'hxx;
-            end
+            end        
         end
     endtask
 endclass
 
 class monitor;
-    transaction tr_in;
-    transaction tr_out;
+    transaction tr_in, tr_out;
     mailbox #(transaction) mon2scb_in_mbox;
     mailbox #(transaction) mon2scb_out_mbox;
     virtual uart_interface uart_vif;
 
     parameter BAUD_TIME =10416*10; //10416 clock *10nsec  = 104us
-
+    parameter FRAME_TIME= BAUD_TIME*10;
     function new(mailbox#(transaction) mon2scb_in_mbox,
                  mailbox#(transaction) mon2scb_out_mbox,
                  virtual uart_interface uart_vif);
@@ -120,17 +122,77 @@ class monitor;
         this.uart_vif = uart_vif;
     endfunction
 
+    time frame_start_time;
+    time start_time, c_time; //time variable
+
+
+    
     task uart_receive(output logic [7:0] receive_data);
-        @(posedge uart_vif.clk);
-        #(BAUD_TIME / 2);
-        // check start bit
-        for (int i = 0; i < 8; i++) begin
-            #(BAUD_TIME);
-            receive_data[i] = uart_vif.tx;
+        @(!uart_vif.tx);
+        //start bit check
+        start_time =$time;
+        frame_start_time = start_time;
+        c_time =start_time; 
+
+        //check start bit
+        while (uart_vif.tx == 0 &&((c_time - start_time) <= BAUD_TIME)) begin
+            @(posedge uart_vif.clk);
+            c_time = $time;
         end
-        #(BAUD_TIME);
-        // stop bit check
-        #(BAUD_TIME / 2);
+        if((c_time - start_time) >= BAUD_TIME-(BAUD_TIME/16)) begin
+            tr_out.start_bit_error = 0; //pass
+        end else begin
+            tr_out.start_bit_error = 1; //fail
+        end
+        $display("start bit");
+        $display("%t : c_time - start_time",$time,c_time,start_time);
+
+
+        // data bit read
+        for (int i = 0; i < 8; i++) begin
+            #(BAUD_TIME/2);
+            receive_data[i] = uart_vif.tx;
+            #(BAUD_TIME/2);
+        end
+
+        //stop bit 
+        start_time =$time;
+        c_time = start_time;
+        while ( (!uart_vif.tx) &&
+                ((c_time - start_time) <= BAUD_TIME/2) ) begin
+            @(posedge uart_vif.clk);
+            c_time = $time;
+        end
+        if( (c_time - start_time) >= BAUD_TIME/2 ) begin
+            tr_out.stop_bit_error = 1; 
+        end else begin
+            //stop bit check
+            start_time =$time;
+            c_time = start_time;
+
+            while ( (uart_vif.tx == 1) &&(uart_vif.tx_busy) && //tx_busy 0이면 탈출
+                    ((c_time - start_time) <= BAUD_TIME) ) begin //무한루프 탈출
+                @(posedge uart_vif.clk);
+                c_time = $time;
+            end
+            if( (c_time - start_time) >= BAUD_TIME-(BAUD_TIME/16) ) begin
+                tr_out.stop_bit_error = 0; //pass
+            end else begin
+                tr_out.stop_bit_error = 1; //fail
+            end
+            $display("stop bit");
+            $display("%t :c_time - start_time",c_time,$time, start_time);
+        end
+
+        //frame time
+        c_time =$time;
+        if((  (c_time - frame_start_time) <= (FRAME_TIME+(BAUD_TIME/2)) ) &&
+          (  (c_time - frame_start_time) >= (FRAME_TIME-(BAUD_TIME/2)) )) begin
+            tr_out.frame_time_error = 0;
+          end else begin
+            tr_out.frame_time_error = 1;
+          end
+          $display("%t : frame_time =%d",$time,(c_time- frame_start_time));
     endtask
 
     task run();
@@ -174,6 +236,9 @@ class scoreboard;
 
     int total_cnt = 0;
     int tx_data_pass_cnt =0, tx_data_fail_cnt =0;  
+    int tx_start_bit_pass_cnt =0,tx_start_bit_fail_cnt =0;
+    int tx_stop_bit_pass_cnt =0,tx_stop_bit_fail_cnt =0;
+    int tx_frame_bit_pass_cnt =0,tx_frame_bit_fail_cnt =0;
 
     task run();
         forever begin
@@ -183,12 +248,39 @@ class scoreboard;
             tr_out.debug_print("scb_in");
             
             total_cnt++;
+
+            //tx start bit pass/fail
+            if(!tr_out.start_bit_error) begin
+                tx_start_bit_pass_cnt++;
+                $display("tx start bit pass!!!");
+            end else begin
+                tx_start_bit_fail_cnt++;
+                 $display("tx start bit pass!!!");
+            end
+            
+            //tx data pass/fail
             if(tr_in.tx_data===tr_out.tx_data)begin
                 tx_data_pass_cnt++;
                 $display("tx_data pass !!");
             end else begin 
                 tx_data_fail_cnt++;
                 $display("tx_data fail !!");
+            end
+            //stop
+            if(!tr_out.stop_bit_error) begin
+                tx_stop_bit_pass_cnt++;
+                $display("tx stop bit pass!!!");
+            end else begin
+                tx_stop_bit_fail_cnt++;
+                 $display("tx stop bit fail!!!");
+            end
+            //frame
+            if(!tr_out.frame_time_error) begin
+                tx_frame_bit_pass_cnt++;
+                $display("tx frame bit pass!!!");
+            end else begin
+                tx_frame_bit_fail_cnt++;
+                 $display("tx frame  fail!!!");
             end
             ->gen_next_evt;
         end
@@ -197,9 +289,19 @@ class scoreboard;
     task report();
         $display ("*************************");
         $display ("uart tx verification test");
-        $display ("   tx_total_pass = %4d    ",total_cnt);
+        $display ("    tx_total_pass = %4d    ",total_cnt);
         $display ("    tx_data_pass = %4d    ",tx_data_pass_cnt);
         $display ("    tx_data_fail = %4d    ",tx_data_fail_cnt);
+        $display ("*************************");
+        $display ("    tx_start_pass = %4d    ", tx_start_bit_pass_cnt);
+        $display ("    tx_start_fail = %4d    ", tx_start_bit_fail_cnt);
+        $display ("*************************");
+        $display ("    tx_stop_pass = %4d    ", tx_stop_bit_pass_cnt);
+        $display ("    tx_stop_fail = %4d    ", tx_stop_bit_fail_cnt);   
+        $display ("*************************");
+        $display ("    tx_frame_pass = %4d    ", tx_frame_bit_pass_cnt);
+        $display ("    tx_frame_fail = %4d    ", tx_frame_bit_fail_cnt);   
+
     endtask
 endclass
 

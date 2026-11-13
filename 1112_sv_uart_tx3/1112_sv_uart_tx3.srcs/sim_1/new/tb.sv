@@ -180,7 +180,7 @@ class scoreboard;
             mon2scb_in_mbox.get(tr_in);
             tr_in.debug_print("scb_in");
             mon2scb_out_mbox.get(tr_out);
-            tr_out.debug_print("scb_in");
+            tr_out.debug_print("scb_out");
             
             total_cnt++;
             if(tr_in.tx_data===tr_out.tx_data)begin
@@ -197,7 +197,7 @@ class scoreboard;
     task report();
         $display ("*************************");
         $display ("uart tx verification test");
-        $display ("   tx_total_pass = %4d    ",total_cnt);
+        $display ("   tx_total_count = %4d    ",total_cnt);
         $display ("    tx_data_pass = %4d    ",tx_data_pass_cnt);
         $display ("    tx_data_fail = %4d    ",tx_data_fail_cnt);
     endtask
