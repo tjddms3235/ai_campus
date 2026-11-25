@@ -344,6 +344,7 @@ class uvm_test_uart extends uvm_test;
         //factory registry
     `uvm_component_utils(uvm_test_uart)
     uart_rx_environment env;   
+    uart_rx_sequence seq;
 
     function new(string name = "uvm_test_uart", uvm_component parent);
         super.new(name, parent);
@@ -352,7 +353,17 @@ class uvm_test_uart extends uvm_test;
     function void build_phase(uvm_phase phase);
         super.build_phase(phase);
         env = uart_rx_environment::type_id::create("env",this);
+        seq = uart_rx_sequence::type_id::create("seq",this);
     endfunction
+
+    task run_phase(uvm_phase phase);
+        super.run_phase(phase);
+        `uvm_info("uvm test run","run phase!",UVM_LOW)
+        phase.raise_objection(this);
+            seq.start(env.agt_in.sqr);
+        phase.drop_objection(this);
+        #10;
+    endtask
 
     function void end_of_elaboration_phase(uvm_phase phase);
         uvm_root::get().print_topology();
