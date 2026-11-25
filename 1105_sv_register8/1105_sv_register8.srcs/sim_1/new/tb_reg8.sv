@@ -1,6 +1,5 @@
 `timescale 1ns / 1ps
 
-
 interface reg_interface (
     input clk
 );
