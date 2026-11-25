@@ -55,14 +55,26 @@ endclass
 //sequence
 class uart_rx_sequence extends uvm_sequence #(uart_seq_item);
     `uvm_object_utils(uart_rx_sequence)
+    int run_count =2;
+    uart_seq_item seq_item;
 
     function new(string name = "uart_rx_seq");
         super.new(name);
     endfunction
 
-   // taks body();
-    
-   // endtask
+   task body();
+        `uvm_info("SEQ","body",UVM_LOW)
+        seq_item = uart_seq_item::type_id::create("uart_seq_item");
+        repeat(run_count) begin
+            start_item(seq_item);
+                if(!seq_item.randomize())begin
+                    `uvmfatal("seq","fai; seq_item ramdomize")
+                end
+                seq_item_debug_print("seq");
+
+            finish_item();
+        end
+   endtask
 
 endclass
 
@@ -72,6 +84,8 @@ class uart_rx_driver extends uvm_driver #(uart_seq_item);
     `uvm_component_utils(uart_rx_driver)
     //virtual interface
     virtual uart_interface uart_vif;
+    uart_seq_item seq_item;
+
     function new (string name ="uart_rx_drv", uvm_component parent);
         super.new(name, parent);
     endfunction
@@ -85,6 +99,56 @@ class uart_rx_driver extends uvm_driver #(uart_seq_item);
         end
     endfunction
 
+    task run_phase(uvm_phase phase);
+        super.run_phase(phase);
+        //to reset dut
+        uart_vif.rst =1;
+        uart_vif.rx = 1;
+        @(negedge uar_vif.clk);
+        @(negedge uar_vif.clk);
+        uart_vif.rst =0;
+
+        //dut operation
+        forever begin
+            // to requset to sequence for next seq_item
+            seq_item_port.get_next_item(seq_item);
+            //drive
+            @(negedge uar_vif.clk);
+            uart_vif.rst =0;
+            //call uart_sender task
+            //baud kind mormal
+            uart_sender(seq_item.send_data, NORMAL);
+            for(int i=0; i<(seq_item.interval/10); i++) begin
+                #10;
+            end
+            seq_item_port.item_done();
+        end
+    endtask
+    parameter BAUD_CLK = (100_000_000/9600);
+    parameter BAUD_PERIOD = (BAUD_CLK) * 10;
+    parameter BAUD_FASTER = BAUD_PERIOD - (BAUD_PERIOD/20); //5% FAST FRAME
+    parameter BAUD_SLOWER = BAUD_PERIOD + (BAUD_PERIOD/20); //5% SLOWER FRAME
+
+    //arg :send_data, baud rate mode :kind faster, normal, slower
+    task uart_sender(bit [7:0] send_data, kind_e kind);
+        //RX START
+        uart_vif.rx =0;
+        if(kind == NORMAL)      #(BAUD_PERIOD);
+        else if(kind == FASTER) #(BAUD_FASTER);
+        else if(kind == SLOWER) #(BAUD_SLOWER);
+        //rx data tranceive
+        for(int i=0; i<8; i++)begin
+            uart_vif.rx =send_data[i];
+            if(kind == NORMAL)      #(BAUD_PERIOD);
+            else if(kind == FASTER) #(BAUD_FASTER);
+            else if(kind == SLOWER) #(BAUD_SLOWER);
+        //rx data tranceive
+        end
+        uart_vif.rx =1;
+            if(kind == NORMAL)      #(BAUD_PERIOD);
+            else if(kind == FASTER) #(BAUD_FASTER);
+            else if(kind == SLOWER) #(BAUD_SLOWER);
+    endtask
 endclass
 
 class uart_rx_monitor_in extends uvm_monitor;
@@ -147,6 +211,13 @@ class uart_agent_in extends uvm_agent;
          mon_in = uart_rx_monitor_in::type_id::create("mon_in",this);
          sqr    = uvm_sequencer #(uart_seq_item)::type_id::create("sqr",this);
     endfunction
+//TLM 1.0 connect : sequencer -> driver
+    function void connect_phase(uvm_phase phase);
+        super.connect_phase(phase);
+        `uvm_info("agt_in", "connect phase", UVM_LOW)
+        drv.seq_item_port.connect()
+    endfunction
+
 endclass
 //uart rx out agent
 class uart_agent_out extends uvm_agent;
